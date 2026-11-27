@@ -15,10 +15,25 @@ def cap(kind, maximum):
     resource.setrlimit(kind, (limit, limit))
 
 
-def smooth_palette(image, destination, preset):
+def color_labels(image, budget):
+    from PIL import Image
+
+    # Preserve exact swatches, including opacity, when they fit in the palette.
+    colors = image.getcolors(budget)
+    if colors is not None:
+        palette = [color for _, color in colors]
+        indices = {color: i for i, color in enumerate(palette)}
+        labels = Image.frombytes("P", image.size, bytes(indices[color] for color in image.get_flattened_data()))
+        labels.putpalette(bytes(channel for color in palette for channel in color), rawmode="RGBA")
+        return labels
+    if image.getextrema()[3] == (255, 255):
+        return image.convert("RGB").quantize(colors=budget, method=Image.Quantize.MEDIANCUT)
+    return image.quantize(colors=budget, method=Image.Quantize.FASTOCTREE)
+
+
+def smooth_palette(labels, destination, preset):
     from io import BytesIO
 
-    labels = image.quantize(colors=32)
     width, height = labels.size
     paths_size = 0
     ET.register_namespace("", "http://www.w3.org/2000/svg")
@@ -54,16 +69,16 @@ def palette_svg(image, destination, binary, preset):
     from PIL import Image
 
     image.thumbnail((512, 512))
-    colors = {"シンプル": 8, "標準": 16, "高精細": 32}[preset]
+    colors = {"シンプル": 16, "標準": 64, "高精細": 128}[preset]
     if binary:
         white = Image.new("RGBA", image.size, "white")
         white.alpha_composite(image)
         image = white.convert("L").point(lambda value: 255 if value >= 128 else 0).convert("RGBA")
-    else:
-        image = image.quantize(colors=colors).convert("RGBA")
+    labels = color_labels(image, 2 if binary else colors)
     if shutil.which("potrace"):
-        smooth_palette(image, destination, preset)
+        smooth_palette(labels, destination, preset)
         return
+    image = labels.convert("RGBA")
     width, height = image.size
     # Join adjacent pixels of equal color into horizontal strips.
     with destination.open("w", encoding="utf-8") as svg:
@@ -108,12 +123,13 @@ def convert(directory, color, preset, engine="vtracer"):
         white.alpha_composite(rgba)
         mask = white.convert("L").point(lambda value: 255 if value >= 128 else 0)
         mask.save(source)
-    precision, speckle = {"シンプル": (4, 8), "標準": (6, 4), "高精細": (8, 1)}[preset]
+    precision, speckle, difference = {"シンプル": (5, 8, 16), "標準": (7, 4, 6), "高精細": (8, 1, 2)}[preset]
     svg = directory / "output.svg"
     try:
         vtracer.convert_image_to_svg_py(str(source if binary else preview), str(svg),
                                         colormode="binary" if binary else "color",
-                                        color_precision=precision, filter_speckle=speckle)
+                                        color_precision=precision, filter_speckle=speckle,
+                                        layer_difference=difference)
     finally:
         if svg.exists() and svg.stat().st_size >= MAX_OUTPUT:
             raise OSError(errno.EFBIG, "SVG output limit")

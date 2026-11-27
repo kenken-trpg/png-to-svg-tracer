@@ -65,7 +65,8 @@ if upload.size > MAX_UPLOAD:
     st.error("10 MiB以下のPNGを選んでください。")
     st.stop()
 color = st.radio("カラーモード", ["カラー", "白黒"], horizontal=True)
-preset = st.select_slider("描き込みの細かさ", ["シンプル", "標準", "高精細"], value="標準")
+preset = st.select_slider("描き込みの細かさ", ["シンプル", "標準", "高精細"], value="標準",
+                          help="淡い色の差を残したい場合は高精細を選んでください。カラーの代替変換ではシンプル16色、標準64色、高精細128色まで使用します。")
 if st.button("SVGに変換", type="primary"):
     with st.spinner("画像を確認して輪郭をトレースしています…"):
         output = convert(upload, color, preset)
