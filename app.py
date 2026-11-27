@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from subprocess import TimeoutExpired, run
+from time import monotonic
 import sys
 from tempfile import TemporaryDirectory
 from threading import BoundedSemaphore
@@ -24,8 +25,15 @@ def convert(upload, color, preset):
         with TemporaryDirectory() as temp:
             directory = Path(temp)
             (directory / "input.png").write_bytes(upload.getbuffer())
-            result = run([sys.executable, str(Path(__file__).resolve().with_name("trace.py")),
-                          temp, color, preset], timeout=TIMEOUT)
+            started = monotonic()
+            command = [sys.executable, str(Path(__file__).resolve().with_name("trace.py")),
+                          temp, color, preset]
+            result = run(command, timeout=TIMEOUT)
+            fallback = result.returncode in (-11, -4)
+            if fallback:
+                logging.warning("Native conversion exited with %s; retrying palette conversion", result.returncode)
+                (directory / "input.png").write_bytes(upload.getbuffer())
+                result = run(command + ["palette"], timeout=max(0, TIMEOUT - (monotonic() - started)))
             errors = {
                 2: "入力は10 MiB・1,600万画素以下にしてください。",
                 3: "PNGを読み込めませんでした。画像をPNG形式で保存し直してください。",
@@ -39,7 +47,7 @@ def convert(upload, color, preset):
             if svg.stat().st_size >= MAX_OUTPUT:
                 st.error(errors[4])
                 return
-            return (directory / "preview.png").read_bytes(), svg.read_bytes()
+            return (directory / "preview.png").read_bytes(), svg.read_bytes(), fallback
     except TimeoutExpired:
         st.warning("30秒で処理を停止しました。長辺512 px以下でお試しください。")
     finally:
@@ -62,7 +70,9 @@ if st.button("SVGに変換", type="primary"):
     with st.spinner("画像を確認して輪郭をトレースしています…"):
         output = convert(upload, color, preset)
     if output:
-        preview, svg = output
+        preview, svg, fallback = output
+        if fallback:
+            st.info("簡易変換で生成しました（長辺512 pxまで）。同色の画素を水平のパスにまとめるため、曲線に段差が出る場合があります。")
         st.image(preview, caption="トレースに使用した入力画像")
         st.image(svg.decode("utf-8"), caption="SVGプレビュー")
         st.download_button(f"SVGをダウンロード（{len(svg)/1024:.1f} KiB）", svg,

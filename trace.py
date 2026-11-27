@@ -12,9 +12,37 @@ def cap(kind, maximum):
     resource.setrlimit(kind, (limit, limit))
 
 
-def convert(directory, color, preset):
+def palette_svg(image, destination, binary, preset):
+    from itertools import groupby
     from PIL import Image
-    import vtracer
+
+    image.thumbnail((512, 512))
+    colors = {"シンプル": 8, "標準": 16, "高精細": 32}[preset]
+    if binary:
+        white = Image.new("RGBA", image.size, "white")
+        white.alpha_composite(image)
+        image = white.convert("L").point(lambda value: 255 if value >= 128 else 0).convert("RGBA")
+    else:
+        image = image.quantize(colors=colors).convert("RGBA")
+    width, height = image.size
+    # Join adjacent pixels of equal color into horizontal strips.
+    with destination.open("w", encoding="utf-8") as svg:
+        svg.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">')
+        for y in range(height):
+            row = image.crop((0, y, width, y + 1))
+            x = 0
+            for (r, g, b, a), pixels in groupby(row.get_flattened_data()):
+                length = sum(1 for _ in pixels)
+                if a:
+                    svg.write(f'<path fill="#{r:02x}{g:02x}{b:02x}" fill-opacity="{a / 255:.3f}" d="M{x} {y}h{length}v1h-{length}z"/>')
+                x += length
+            if svg.tell() >= MAX_OUTPUT:
+                raise OSError(errno.EFBIG, "SVG output limit")
+        svg.write("</svg>")
+
+
+def convert(directory, color, preset, engine="vtracer"):
+    from PIL import Image
 
     source = directory / "input.png"
     if source.stat().st_size > MAX_UPLOAD:
@@ -31,6 +59,10 @@ def convert(directory, color, preset):
     preview = directory / "preview.png"
     rgba.save(preview)
     binary = color == "白黒"
+    if engine == "palette":
+        palette_svg(rgba, directory / "output.svg", binary, preset)
+        return 0
+    import vtracer
     if binary:
         white = Image.new("RGBA", rgba.size, "white")
         white.alpha_composite(rgba)
