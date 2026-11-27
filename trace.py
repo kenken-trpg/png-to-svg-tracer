@@ -1,6 +1,9 @@
 from pathlib import Path
 import errno
 import resource
+import shutil
+import subprocess
+from xml.etree import ElementTree as ET
 import sys
 
 from limits import MAX_OUTPUT, MAX_PIXELS, MAX_UPLOAD, TRACE_EDGE
@@ -10,6 +13,40 @@ def cap(kind, maximum):
     soft, hard = resource.getrlimit(kind)
     limit = min(value for value in (soft, hard, maximum) if value != resource.RLIM_INFINITY)
     resource.setrlimit(kind, (limit, limit))
+
+
+def smooth_palette(image, destination, preset):
+    from io import BytesIO
+
+    labels = image.quantize(colors=32)
+    width, height = labels.size
+    paths_size = 0
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
+    root = ET.Element("{http://www.w3.org/2000/svg}svg", width=str(width), height=str(height),
+                      viewBox=f"0 0 {width} {height}")
+    for _, index in sorted(labels.getcolors(), reverse=True):
+        rgb = labels.getpalette("RGBA")[4 * index:4 * index + 4]
+        r, g, b, alpha = rgb
+        if not alpha:
+            continue
+        mask = labels.copy()
+        mask.putpalette([v for i in range(256) for v in ([0] * 3 if i == index else [255] * 3)])
+        mask.info.clear()
+        bitmap = BytesIO()
+        mask.convert("1").save(bitmap, format="PPM")
+        layer = destination.with_name("layer.svg")
+        tolerance = {"シンプル": "0.5", "標準": "0.2", "高精細": "0.1"}[preset]
+        subprocess.run(["potrace", "--svg", "--turdsize", "0", "--opttolerance", tolerance,
+                        "--output", str(layer), "-"], input=bitmap.getvalue(), check=True)
+        paths_size += layer.stat().st_size
+        if paths_size >= MAX_OUTPUT:
+            raise OSError(errno.EFBIG, "SVG output limit")
+        group = ET.parse(layer).getroot().find("{http://www.w3.org/2000/svg}g")
+        if group is not None:
+            group.set("fill", f"#{r:02x}{g:02x}{b:02x}")
+            group.set("fill-opacity", f"{alpha / 255:.3f}")
+            root.append(group)
+    ET.ElementTree(root).write(destination, encoding="utf-8")
 
 
 def palette_svg(image, destination, binary, preset):
@@ -24,6 +61,9 @@ def palette_svg(image, destination, binary, preset):
         image = white.convert("L").point(lambda value: 255 if value >= 128 else 0).convert("RGBA")
     else:
         image = image.quantize(colors=colors).convert("RGBA")
+    if shutil.which("potrace"):
+        smooth_palette(image, destination, preset)
+        return
     width, height = image.size
     # Join adjacent pixels of equal color into horizontal strips.
     with destination.open("w", encoding="utf-8") as svg:

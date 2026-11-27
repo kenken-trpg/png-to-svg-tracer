@@ -72,7 +72,11 @@ if st.button("SVGに変換", type="primary"):
     if output:
         preview, svg, fallback = output
         if fallback:
-            st.info("簡易変換で生成しました（長辺512 pxまで）。同色の画素を水平のパスにまとめるため、曲線に段差が出る場合があります。")
+            import shutil
+            if shutil.which("potrace"):
+                st.info("輪郭を曲線で整えました（長辺512 pxまで）。")
+            else:
+                st.info("簡易変換で生成しました（長辺512 pxまで）。同色の画素を水平のパスにまとめるため、曲線に段差が出る場合があります。")
         st.image(preview, caption="トレースに使用した入力画像")
         st.image(svg.decode("utf-8"), caption="SVGプレビュー")
         st.download_button(f"SVGをダウンロード（{len(svg)/1024:.1f} KiB）", svg,
