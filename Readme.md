@@ -9,10 +9,12 @@ Python 3.12で動作を確認しています。リポジトリをクローンし
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/streamlit run app.py
+PNG_TRACER_PROFILE=local .venv/bin/streamlit run app.py
 ```
 
 ブラウザでターミナルに表示されたURLを開きます。通常は `http://localhost:8501` です。終了するにはターミナルで Ctrl+C を押します。
+
+ローカル設定でのVTracer変換では、「高精細」の長辺は最大2,048 px、「シンプル」「標準」は最大1,024 pxです。原画が上限より小さい場合は原寸を使用します。環境変数を省略するとCloudと同じ設定になります。
 
 ## 使い方
 

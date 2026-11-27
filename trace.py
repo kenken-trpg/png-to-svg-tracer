@@ -6,7 +6,7 @@ import subprocess
 from xml.etree import ElementTree as ET
 import sys
 
-from limits import MAX_OUTPUT, MAX_PIXELS, MAX_UPLOAD, TRACE_EDGE, palette_edge
+from limits import MAX_OUTPUT, MAX_PIXELS, MAX_UPLOAD, palette_edge, trace_edge
 
 
 def cap(kind, maximum):
@@ -107,7 +107,8 @@ def convert(directory, color, preset, engine="vtracer"):
         with Image.open(source, formats=["PNG"]) as image:
             if image.width * image.height > MAX_PIXELS:
                 return 2
-            image.thumbnail((TRACE_EDGE, TRACE_EDGE))
+            edge = trace_edge(preset)
+            image.thumbnail((edge, edge))
             rgba = image.convert("RGBA")
             rgba.info.clear()
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):

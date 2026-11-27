@@ -8,7 +8,7 @@ from threading import BoundedSemaphore
 
 import streamlit as st
 
-from limits import MAX_OUTPUT, MAX_UPLOAD, TIMEOUT, palette_edge
+from limits import MAX_OUTPUT, MAX_UPLOAD, TIMEOUT, palette_edge, trace_edge
 
 
 @st.cache_resource
@@ -57,7 +57,10 @@ def convert(upload, color, preset):
 st.set_page_config(page_title="PNG → SVG")
 st.title("PNG → SVG")
 st.write("ロゴやイラストの輪郭をトレースし、拡大できるSVGに変換します。")
-st.caption("Community Cloudでは、まず少色のロゴで長辺256〜512 px・標準をお試しください。長辺1,024 pxを超える入力は縮小します。")
+if trace_edge("高精細") == 2048:
+    st.caption("ローカル変換では、高精細は長辺2,048 px、シンプル・標準は1,024 pxまでトレースします。")
+else:
+    st.caption("Community Cloudでは、まず少色のロゴで長辺256〜512 px・標準をお試しください。長辺1,024 pxを超える入力は縮小します。")
 upload = st.file_uploader("PNG画像を選択（10 MiB以下）", type="png")
 if upload is None:
     st.stop()
