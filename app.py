@@ -8,7 +8,7 @@ from threading import BoundedSemaphore
 
 import streamlit as st
 
-from limits import MAX_OUTPUT, MAX_UPLOAD, TIMEOUT
+from limits import MAX_OUTPUT, MAX_UPLOAD, TIMEOUT, palette_edge
 
 
 @st.cache_resource
@@ -75,9 +75,9 @@ if st.button("SVGに変換", type="primary"):
         if fallback:
             import shutil
             if shutil.which("potrace"):
-                st.info("輪郭を曲線で整えました（長辺512 pxまで）。")
+                st.info(f"輪郭を曲線で整えました（長辺{palette_edge(preset)} pxまで）。")
             else:
-                st.info("簡易変換で生成しました（長辺512 pxまで）。同色の画素を水平のパスにまとめるため、曲線に段差が出る場合があります。")
+                st.info(f"簡易変換で生成しました（長辺{palette_edge(preset)} pxまで）。同色の画素を水平のパスにまとめるため、曲線に段差が出る場合があります。")
         st.image(preview, caption="トレースに使用した入力画像")
         st.image(svg.decode("utf-8"), caption="SVGプレビュー")
         st.download_button(f"SVGをダウンロード（{len(svg)/1024:.1f} KiB）", svg,

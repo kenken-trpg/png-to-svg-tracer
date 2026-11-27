@@ -6,7 +6,7 @@ import subprocess
 from xml.etree import ElementTree as ET
 import sys
 
-from limits import MAX_OUTPUT, MAX_PIXELS, MAX_UPLOAD, TRACE_EDGE
+from limits import MAX_OUTPUT, MAX_PIXELS, MAX_UPLOAD, TRACE_EDGE, palette_edge
 
 
 def cap(kind, maximum):
@@ -68,7 +68,8 @@ def palette_svg(image, destination, binary, preset):
     from itertools import groupby
     from PIL import Image
 
-    image.thumbnail((512, 512))
+    edge = palette_edge(preset)
+    image.thumbnail((edge, edge))
     colors = {"シンプル": 16, "標準": 64, "高精細": 128}[preset]
     if binary:
         white = Image.new("RGBA", image.size, "white")
